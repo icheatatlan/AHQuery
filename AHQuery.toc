@@ -4,5 +4,6 @@
 ## Author: Urbit (Sulfuras)
 ## Version: v1.0.0
 ## OptionalDeps: TradeSkillMaster, BootyBayGazette
+## SavedVariables: AHQuery_Config
 
 AHQuery.lua

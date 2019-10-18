@@ -1,5 +1,9 @@
 local items = {}
 local to_announce = {}
+local available_price_sources = {}
+local config = {
+  price_sources = {},
+}
 
 local format_price = function (price)
   if not price then
@@ -17,7 +21,7 @@ local format_price = function (price)
   local g = price
 
   local fmt = (g > 0 and tostring(g) .. 'g ' or '') .. (s > 0 and tostring(s) .. 's ' or '') .. (c > 0 and tostring(c) .. 'c ' or '')
-  return fmt:match('^%s*(.-)%s*$')
+  return fmt:sub(1, fmt:len() - 1)
 end
 
 local queue_announcement = function (itemID, source, sender)
@@ -25,43 +29,22 @@ local queue_announcement = function (itemID, source, sender)
 end
 
 local announce = function ()
-  local hasTSM = TSMAPI_FOUR and TSMAPI_FOUR.CustomPrice and TSMAPI_FOUR.CustomPrice.GetItemPrice
-  local hasBBG = TUJMarketInfo
-
   local queue = to_announce
   to_announce = {}
 
   for itemID, source in pairs(queue) do
     local _, itemLink = GetItemInfo(itemID)
 
-    local tsmInfo = nil
-    if hasTSM then
-      local marketValue = TSMAPI_FOUR.CustomPrice.GetItemPrice(itemID, 'DBMarket')
-      local regionMarketValue = TSMAPI_FOUR.CustomPrice.GetItemPrice(itemID, 'DBRegionMarketAvg')
-      local minBuyout = TSMAPI_FOUR.CustomPrice.GetItemPrice(itemID, 'DBMinBuyout')
-      local regionMinBuyout = TSMAPI_FOUR.CustomPrice.GetItemPrice(itemID, 'DBRegionMinBuyoutAvg')
-
-      if marketValue or regionMarketValue or minBuyout or regionMinBuyout then
-        tsmInfo = string.format('TSM: realm %s (min. %s), region %s (min. %s)', format_price(marketValue), format_price(minBuyout), format_price(regionMarketValue), format_price(regionMinBuyout))
+    local price_strs = {}
+    for _, source in ipairs(config.price_sources) do
+      local f = source.fn(itemID)
+      if f then
+        table.insert(price_strs, source.name .. ': ' .. f)
       end
     end
 
-    local bbgInfo = nil
-    if hasBBG then
-      local p = TUJMarketInfo(itemID)
-      if p then
-        bbgInfo = string.format('BBG: realm %s ± %s, global %s ± %s', format_price(p['market']), format_price(p['stddev']), format_price(p['globalMean']), format_price(p['globalStdDev']))
-      end
-    end
-
-    local formatted = nil
-    if tsmInfo and bbgInfo then
-      formatted = tsmInfo .. ' {rt1} ' .. bbgInfo
-    elseif bbgInfo or tsmInfo then
-      formatted = (tsmInfo or '') .. (bbgInfo or '')
-    end
-
-    if formatted then
+    if #price_strs > 0 then
+      local formatted = table.concat(price_strs, ' || ')
       SendChatMessage(itemLink .. ' ' .. formatted, source.source, nil, source.source == 'WHISPER' and source.sender or nil)
     end
   end
@@ -89,7 +72,184 @@ local handle_message = function (msg, source, sender)
   end
 end
 
+local build_price_sources = function ()
+  local tsm = TSMAPI_FOUR and TSMAPI_FOUR.CustomPrice and TSMAPI_FOUR.CustomPrice.GetItemPrice
+  local bbg = TUJMarketInfo
+
+  if tsm then
+    available_price_sources['TSM'] = function (itemID)
+      local marketValue = tsm(itemID, 'DBMarket')
+      local regionMarketValue = tsm(itemID, 'DBRegionMarketAvg')
+      local minBuyout = tsm(itemID, 'DBMinBuyout')
+      local regionMinBuyout = tsm(itemID, 'DBRegionMinBuyoutAvg')
+
+      if marketValue or regionMarketValue or minBuyout or regionMinBuyout then
+        return string.format(
+          'realm %s (min. %s), region %s (min. %s)',
+          format_price(marketValue),
+          format_price(minBuyout),
+          format_price(regionMarketValue),
+          format_price(regionMinBuyout)
+        )
+      end
+
+      return nil
+    end
+  end
+
+  if bbg then
+    available_price_sources['BBG'] = function (itemID)
+      local p = TUJMarketInfo(itemID)
+      if p then
+        return string.format(
+          'realm %s ± %s, global %s ± %s',
+          format_price(p['market']),
+          format_price(p['stddev']),
+          format_price(p['globalMean']),
+          format_price(p['globalStdDev'])
+        )
+      end
+
+      return nil
+    end
+  end
+end
+
+local autoconfigure_price_sources = function ()
+  local private_source = nil
+  local public_source = nil
+
+  -- first, choose a 'private' source for more readily updated pricing
+  -- for now, only TSM is supported
+  if available_price_sources['TSM'] then
+    private_source = 'TSM'
+  end
+
+  -- second, choose a 'public' source for aggregate pricing (e.g. BBG)
+  -- for now, only BBG/TUJ is supported
+  if available_price_sources['BBG'] then
+    public_source = 'BBG'
+  end
+
+  if private_source then
+    table.insert(config.price_sources, { name = private_source, fn = available_price_sources[private_source] })
+  end
+
+  if public_source then
+    table.insert(config.price_sources, { name = public_source, fn = available_price_sources[public_source] })
+  end
+end
+
+local save_config = function ()
+  local price_sources = {}
+  for _, price_source in ipairs(config.price_sources) do
+    table.insert(price_sources, price_source.name)
+  end
+
+  AHQuery_Config.price_sources = price_sources
+end
+
+local load_config = function ()
+  if not AHQuery_Config then
+    AHQuery_Config = {
+      price_sources = {},
+    }
+    autoconfigure_price_sources()
+  else
+    for _, name in ipairs(AHQuery_Config.price_sources) do
+      local price_source = available_price_sources[name]
+      if price_source then
+        table.insert(config.price_sources, { name = name, fn = available_price_sources[name] })
+      end
+    end
+  end
+
+  save_config()
+end
+
+SLASH_AHQUERY1 = '/ahquery'
+SlashCmdList['AHQUERY'] = function (arg_str)
+  local cmd = nil
+  local rest = nil
+
+  local space = arg_str:find(' ')
+  if space then
+    cmd = arg_str:sub(1, space - 1)
+    rest = arg_str:sub(space + 1)
+  else
+    cmd = arg_str
+  end
+
+  if cmd == 'sources' then
+    local source_names = {}
+    for source_name, _ in pairs(available_price_sources) do
+      table.insert(source_names, source_name)
+    end
+
+    if #source_names == 0 then
+      print('No price sources are available.  Install a supported auction database addon to use AHQuery.')
+      return
+    end
+
+    local message = 'Available price sources: ' .. table.concat(source_names, ' ')
+
+    source_names = {}
+    for _, source in ipairs(config.price_sources) do
+      table.insert(source_names, source.name)
+    end
+
+    if #source_names > 0 then
+      message = message .. ' || Enabled: ' .. table.concat(source_names, ' ')
+    else
+      message = message .. ' || No sources are enabled'
+    end
+
+    print(message)
+  elseif cmd == 'toggle' and rest then
+    local source_name = string.upper(rest)
+
+    local enabled_index = nil
+    for i, source in ipairs(config.price_sources) do
+      if source.name == source_name then
+        enabled_index = i
+      end
+    end
+
+    if enabled_index then
+      table.remove(config.price_sources, enabled_index)
+      print('Disabled price source ' .. source_name)
+
+      if #config.price_sources == 0 then
+        print('No price sources are enabled.  Price checks will not be responded to.')
+      end
+    elseif available_price_sources[source_name] then
+      table.insert(config.price_sources, { name = source_name, fn = available_price_sources[source_name] })
+      print('Enabled price source ' .. source_name)
+    else
+      print('The price source ' .. source_name .. ' is not available.  Check to see if the addon is installed and up to date.')
+    end
+  elseif cmd == 'reset' then
+    config.price_sources = {}
+    autoconfigure_price_sources()
+    save_config()
+
+    local source_names = {}
+    for _, source in ipairs(config.price_sources) do
+      table.insert(source_names, source.name)
+    end
+
+    print('Selected price sources: ' .. table.concat(source_names, ' '))
+  else
+    print('Usage: /ahquery sources || /ahquery toggle <source> || /ahquery reset')
+  end
+end
+
+
+build_price_sources()
+
 local frame = CreateFrame('frame', 'AHQueryEventFrame')
+frame:RegisterEvent('ADDON_LOADED')
+frame:RegisterEvent('PLAYER_LOGOUT')
 frame:RegisterEvent('CHAT_MSG_GUILD')
 frame:RegisterEvent('CHAT_MSG_OFFICER')
 frame:RegisterEvent('CHAT_MSG_PARTY')
@@ -98,6 +258,18 @@ frame:RegisterEvent('CHAT_MSG_RAID')
 frame:RegisterEvent('CHAT_MSG_RAID_LEADER')
 frame:RegisterEvent('CHAT_MSG_WHISPER')
 frame:SetScript('OnEvent', function (self, event, ...)
+  if event == 'ADDON_LOADED' then
+    local addon = ...
+    if addon == 'AHQuery' then
+      load_config()
+    end
+
+    return
+  elseif event == 'PLAYER_LOGOUT' then
+    save_config()
+  end
+
+  -- anything else is a chat message
   local msg, sender = ...
   local source = event:sub(string.len('CHAT_MSG_') + 1):gsub('_LEADER', '')
   handle_message(msg, source, sender)

@@ -1,15 +1,28 @@
-#### Automatically responds to item price check messages using pricing information from your TradeSkillMaster and/or BootyBayGazette auction databases.
-You must have at least one of them installed for this addon to work.
+#### Automatically responds to item price check messages using pricing information from auction database addons.
+You must have at least one supported auction database addon installed for this addon to work:
+- TradeSkillMaster (`TSM`)
+- BootyBayGazette / TheUndermineJournal (`BBG`)
+
 
 ##### Usage
 This addon listens to whispers, guild chat, officer chat, party chat, and raid chat for messages containing `!price` and one or more item links.
 
-The response includes the market value and last seen minimum buyout of the item(s) determined by TradeSkillMaster for your realm and region (via the TSM helper application) when available, and the market value with standard deviation for your realm and region determined by BootyBayGazette when available.
+The response will include certain pricing information depending on the sources you have enabled:
+- TradeSkillMaster: Realm and region market value and minimum buyout.  Region information is only available via the TSM helper application.
+- BootyBayGazette / TheUndermineJournal: Realm and global market value and standard deviation.
 
-You must manually scan with TradeSkillMaster and keep the BootyBayGazette addon up to date to maintain accurate pricing info.
+
+##### Customization
+On first use, AHQuery chooses a 'private' and a 'public' price source to query.  Private sources are ones that provide accurate pricing data from locally obtained scans in-game.  Public sources are community aggregated data that updates less frequently, such as BootyBayGazette.
+
+AHQuery will select the first available addon from this list of sources:
+- Public: TSM
+- Private: BBG/TUJ
+
+You can enable or disable a price source by using `/ahquery toggle <some source>`, or revert to the automatically selected sources with `/ahquery reset`.
+To list available sources, use `/ahquery sources`.
 
 
 ##### Links
-CurseForge: https://www.curseforge.com/wow/addons/ahquery
-GitHub: https://github.com/icheatatlan/AHQuery
-
+- CurseForge: https://www.curseforge.com/wow/addons/ahquery
+- GitHub: https://github.com/icheatatlan/AHQuery

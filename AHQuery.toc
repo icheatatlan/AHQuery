@@ -1,0 +1,8 @@
+## Interface: 11302
+## Title: AHQuery
+## Notes: Query TradeSkillMaster and BootyBayGazette auction databases
+## Author: Urbit (Sulfuras)
+## Version: v1.0.0
+## OptionalDeps: TradeSkillMaster, BootyBayGazette
+
+AHQuery.lua

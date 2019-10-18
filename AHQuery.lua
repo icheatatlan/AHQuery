@@ -75,21 +75,23 @@ end
 local build_price_sources = function ()
   local tsm = TSMAPI_FOUR and TSMAPI_FOUR.CustomPrice and TSMAPI_FOUR.CustomPrice.GetItemPrice
   local bbg = TUJMarketInfo
+  local auc_market = AucAdvanced and AucAdvanced.API.GetMarketValue
+  local auc_buyout = AucAdvanced and AucAdvanced.Modules.Util.SimpleAuction and AucAdvanced.Modules.Util.SimpleAuction.Private.GetItems
 
   if tsm then
     available_price_sources['TSM'] = function (itemID)
-      local marketValue = tsm(itemID, 'DBMarket')
-      local regionMarketValue = tsm(itemID, 'DBRegionMarketAvg')
-      local minBuyout = tsm(itemID, 'DBMinBuyout')
-      local regionMinBuyout = tsm(itemID, 'DBRegionMinBuyoutAvg')
+      local market_value = tsm(itemID, 'DBMarket')
+      local region_market_value = tsm(itemID, 'DBRegionMarketAvg')
+      local min_buyout = tsm(itemID, 'DBMinBuyout')
+      local region_min_buyout = tsm(itemID, 'DBRegionMinBuyoutAvg')
 
-      if marketValue or regionMarketValue or minBuyout or regionMinBuyout then
+      if market_value or region_market_value or min_buyout or region_min_buyout then
         return string.format(
           'realm %s (min. %s), region %s (min. %s)',
-          format_price(marketValue),
-          format_price(minBuyout),
-          format_price(regionMarketValue),
-          format_price(regionMinBuyout)
+          format_price(market_value),
+          format_price(min_buyout),
+          format_price(region_market_value),
+          format_price(region_min_buyout)
         )
       end
 
@@ -113,6 +115,23 @@ local build_price_sources = function ()
       return nil
     end
   end
+
+  if auc_market or auc_buyout then
+    available_price_sources['AUC'] = function (itemID)
+      local market_value = auc_market and auc_market(itemID) or nil
+      local min_buyout = auc_buyout and select(6, auc_buyout(itemID)) or nil
+
+      if not market_value and not min_buyout then
+        return nil
+      end
+
+      return string.format(
+        'realm %s (min. %s)',
+        format_price(market_value),
+        format_price(min_buyout)
+      )
+    end
+  end
 end
 
 local autoconfigure_price_sources = function ()
@@ -120,9 +139,10 @@ local autoconfigure_price_sources = function ()
   local public_source = nil
 
   -- first, choose a 'private' source for more readily updated pricing
-  -- for now, only TSM is supported
   if available_price_sources['TSM'] then
     private_source = 'TSM'
+  elseif available_price_sources['AUC'] then
+    private_source = 'AUC'
   end
 
   -- second, choose a 'public' source for aggregate pricing (e.g. BBG)

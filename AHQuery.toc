@@ -1,9 +1,9 @@
 ## Interface: 11302
 ## Title: AHQuery
-## Notes: Query TradeSkillMaster and BootyBayGazette auction databases
+## Notes: Simple price checks through chat via auction database addons
 ## Author: Urbit (Sulfuras)
-## Version: v1.0.0
-## OptionalDeps: TradeSkillMaster, BootyBayGazette
+## Version: v1.0.1
+## OptionalDeps: TradeSkillMaster, BootyBayGazette, Auc-Advanced
 ## SavedVariables: AHQuery_Config
 
 AHQuery.lua

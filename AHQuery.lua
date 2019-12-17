@@ -37,7 +37,7 @@ local announce = function ()
 
     local price_strs = {}
     for _, source in ipairs(config.price_sources) do
-      local f = source.fn(itemID)
+      local f = source.fn(itemID, itemLink)
       if f then
         table.insert(price_strs, source.name .. ': ' .. f)
       end
@@ -73,17 +73,18 @@ local handle_message = function (msg, source, sender)
 end
 
 local build_price_sources = function ()
-  local tsm = TSMAPI_FOUR and TSMAPI_FOUR.CustomPrice and TSMAPI_FOUR.CustomPrice.GetItemPrice
+  local tsm = TSM_API and TSM_API.GetCustomPriceValue
   local bbg = TUJMarketInfo
   local auc_market = AucAdvanced and AucAdvanced.API.GetMarketValue
   local auc_buyout = AucAdvanced and AucAdvanced.Modules.Util.SimpleAuction and AucAdvanced.Modules.Util.SimpleAuction.Private.GetItems
 
   if tsm then
-    available_price_sources['TSM'] = function (itemID)
-      local market_value = tsm(itemID, 'DBMarket')
-      local region_market_value = tsm(itemID, 'DBRegionMarketAvg')
-      local min_buyout = tsm(itemID, 'DBMinBuyout')
-      local region_min_buyout = tsm(itemID, 'DBRegionMinBuyoutAvg')
+    available_price_sources['TSM'] = function (_itemID, itemLink)
+      local tsmItem = TSM_API.ToItemString(itemLink)
+      local market_value = tsm('DBMarket', tsmItem)
+      local region_market_value = tsm('DBRegionMarketAvg', tsmItem)
+      local min_buyout = tsm('DBMinBuyout', tsmItem)
+      local region_min_buyout = tsm('DBRegionMinBuyoutAvg', tsmItem)
 
       if market_value or region_market_value or min_buyout or region_min_buyout then
         return string.format(
@@ -100,7 +101,7 @@ local build_price_sources = function ()
   end
 
   if bbg then
-    available_price_sources['BBG'] = function (itemID)
+    available_price_sources['BBG'] = function (itemID, _itemLink)
       local p = TUJMarketInfo(itemID)
       if p then
         return string.format(
@@ -117,7 +118,7 @@ local build_price_sources = function ()
   end
 
   if auc_market or auc_buyout then
-    available_price_sources['AUC'] = function (itemID)
+    available_price_sources['AUC'] = function (itemID, _itemLink)
       local market_value = auc_market and auc_market(itemID) or nil
       local min_buyout = auc_buyout and select(6, auc_buyout(itemID)) or nil
 

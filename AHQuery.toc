@@ -1,8 +1,8 @@
-## Interface: 11302
+## Interface: 11303
 ## Title: AHQuery
 ## Notes: Simple price checks through chat via auction database addons
 ## Author: Urbit (Sulfuras)
-## Version: v1.0.1
+## Version: v1.0.2
 ## OptionalDeps: TradeSkillMaster, BootyBayGazette, Auc-Advanced
 ## SavedVariables: AHQuery_Config
 
